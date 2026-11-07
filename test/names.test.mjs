@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { withPaired, namesFrom } from "../src/i18n/names.mjs";
+import { withPaired, namesFrom, parsePack } from "../src/i18n/names.mjs";
+
+test("Windows line endings do not become part of translated names", () => {
+	const text = 'R("npc", 1, 2, [[\r\n1\tTest name\r\n2\tEncoded%0Dreturn\r\n]])';
+	const names = parsePack(text).get("npc");
+	assert.equal(names.get("1"), "Test name");
+	assert.equal(names.get("2"), "Encoded\rreturn");
+});
 
 // The fixture clone's names files, laid out as the web page hosts them (names/<locale>/).
 const base = fileURLToPath(new URL("./fixtures/clone/", import.meta.url));

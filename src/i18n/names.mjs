@@ -25,7 +25,7 @@ export function parsePack(text) {
 	const kinds = new Map();
 	for (const m of String(text ?? "").matchAll(/^R\("(\w+)", \d+, \d+, \[(=*)\[\n?([\s\S]*?)\]\2\]\)/gm)) {
 		if (!kinds.has(m[1])) kinds.set(m[1], new Map());
-		for (const line of m[3].split("\n")) {
+		for (const line of m[3].split(/\r?\n/)) {
 			const tab = line.indexOf("\t");
 			if (tab > 0) kinds.get(m[1]).set(line.slice(0, tab), line.slice(tab + 1).replace(/%([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))));
 		}

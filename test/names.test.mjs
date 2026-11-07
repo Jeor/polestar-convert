@@ -2,10 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { withPaired, namesFrom } from "../src/i18n/names.mjs";
 
 // The fixture clone's names files, laid out as the web page hosts them (names/<locale>/).
-const base = new URL("./fixtures/clone/", import.meta.url).pathname;
+const base = fileURLToPath(new URL("./fixtures/clone/", import.meta.url));
 const BUILD = "1.60.1.1";
 const hosted = {
 	"names/zhCN/Names.lua": "addon/Polestar_zhCN/Names.lua",

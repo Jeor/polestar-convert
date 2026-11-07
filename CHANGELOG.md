@@ -4,6 +4,16 @@
 
 For Polestar 0.3.1: the page's compiler and data are Polestar 0.3.1's.
 
+- **RestedXP dialogue:** a single `.skipgossipid` for an exact known NPC can
+  use Polestar's gossip option. Ambiguous or completion-changing cases stay
+  out and are reported. Ignored and unknown commands with explanatory text
+  now identify that text in the report for review.
+- **Build reports:** the browser ZIP and CLI output include source versions,
+  conversion options and game-data identity in `reports/build-provenance.json`.
+  The CLI can record an explicitly supplied converter commit hash.
+- **Windows:** name tests use native file paths, and CRLF line endings no
+  longer become part of translated NPC, item or quest names.
+
 - **RestedXP:** keep instructions attached to `.goto`, `.waypoint` and known-item
   `.use` commands, including class-specific and translated text. Travel notes
   carried into the next step now retain their directions instead of only coordinates.

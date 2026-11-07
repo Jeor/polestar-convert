@@ -12,7 +12,7 @@ import { resolveObjective } from "../objective.mjs";
 
 const IGNORED = new Set([
 	"target", "mob", "unitscan", "itemcount", "macro",
-	"skipgossip", "skipgossipid", "disablecheckbox", "is", "item", "addquestitem",
+	"skipgossip", "disablecheckbox", "is", "item", "addquestitem",
 	"itemStat", "zone", "link", "line", "solo", "enabledungeon",
 ]);
 const TASKS = new Set(["hs", "home", "fp", "fly", "deathskip", "abandon", "destroy", "cast", "equip", "bankdeposit", "bankwithdraw", "stable"]);
@@ -261,6 +261,10 @@ function buildOne(step, stepNo, data, ctx, cond) {
 		if (l.cond) {
 			const lc = parseCondition(l.cond, ctx.scope);
 			lc.unknown.forEach((u) => report.note(ctx.name, stepNo, `unknown condition word "${u}"`, l.cond));
+			if (l.name === "skipgossipid" && lc.unknown.length) {
+				report.note(ctx.name, stepNo, "unsupported .skipgossipid: unknown condition", `${l.args} << ${l.cond}${l.text ? ` >>${l.text}` : ""}`);
+				continue;
+			}
 			if (lc.never) {
 				report.count(lc.anywhere ? "line: for characters the guide is not for (dropped)" : "line: condition true for nobody (dropped)");
 				continue;
@@ -816,12 +820,70 @@ function buildOne(step, stepNo, data, ctx, cond) {
 			} else report.count(".timer (ignored)");
 		} else if (n === "goto" || n === "waypoint") {
 			instruction(l); // Coordinates are handled below; keep their explanation too.
+		} else if (n === "skipgossipid") {
+			// Resolve after all goals exist, including vendors written after this line.
+			instruction(l);
 		} else if (IGNORED.has(n)) {
 			report.count(`.${n} (ignored)`);
+			if (plain(l.text)) report.note(ctx.name, stepNo, `lost explanatory text on ignored .${n}`, l.text);
 		} else {
 			report.count(`.${n} (unknown)`);
 			report.note(ctx.name, stepNo, `unknown command .${n}`, l.args);
+			if (plain(l.text)) report.note(ctx.name, stepNo, `lost explanatory text on unknown .${n}`, l.text);
 		}
+	}
+
+	// RXP selects actual gossipOptionIDs, not menu positions. Its several-ID
+	// and parent forms cannot be flattened into Polestar's single option.
+	const gossipLines = step.lines.filter((l) => l.kind === "cmd" && l.name === "skipgossipid");
+	const dialogueCount = step.lines.filter((l) => l.kind === "cmd" && ["skipgossipid", "skipgossip", "gossipoption"].includes(l.name)).length;
+	for (const l of gossipLines) {
+		let reason = null;
+		const option = /^\s*([1-9]\d*)\s*$/.exec(l.args);
+		const lc = parseCondition(l.cond, ctx.scope);
+		const candidates = targets.filter((t) => condsMeet(t.cond, l.cond));
+		const target = candidates.length === 1 ? candidates[0] : null;
+		// Do not use proximity or a fallback name for an unknown explicit ID.
+		const named = target && !target.id ? data.npcByName.get(target.name.toLowerCase()) || [] : [];
+		const npcId = target?.id || (named.length === 1 ? named[0].id : null);
+		if (dialogueCount !== 1) reason = "several dialogue commands (sequence or alternatives)";
+		else if (!option || !Number.isSafeInteger(Number(option[1]))) reason = "requires one positive option ID without a parent prefix";
+		else if (lc.unknown.length || lc.inexact || cond.unknown.length || cond.inexact) reason = "condition cannot be represented exactly";
+		else if (!target || !npcId || !data.npcs[npcId]) reason = "requires one exact known target NPC";
+		else if (target.cond && target.cond.trim() !== (l.cond || "").trim()) reason = "target and dialogue conditions differ";
+		if (reason) {
+			report.count(".skipgossipid unsupported");
+			report.note(ctx.name, stepNo, `unsupported .skipgossipid: ${reason}`, `${l.args}${l.cond ? ` << ${l.cond}` : ""}${l.text ? ` >>${l.text}` : ""}`);
+			continue;
+		}
+		const dialogueGroups = groupsOf(l.cond);
+		const holders = goals.filter((g) => g.kind !== "note");
+		const attachment = (mine) => goals.filter((g) => ["talk", "vendor", "train"].includes(g.kind) && g.npc === npcId && g.only === onlyText(mine));
+		// Later passes can split quest goals into gated steps or remove optional
+		// flags on along work. Only synthesize in the small cases whose completion
+		// semantics survive those passes unchanged: standalone, or one exact-scope
+		// required level goal. All other cases remain a review diagnostic. Check
+		// source commands too: some (zone, for example) emit their goals later.
+		const simpleDialogue = step.lines.every((line) => line.kind !== "cmd" || ["target", "skipgossipid", "xp"].includes(line.name));
+		const canSynthesize = (mine) => simpleDialogue && !completewith && !gotos.length
+			&& (!holders.length || holders.length === 1 && holders[0].kind === "level"
+				&& !holders[0].optional && holders[0].only === onlyText(mine));
+		if (dialogueGroups.some((mine) => attachment(mine).length !== 1 && !canSynthesize(mine))) {
+			report.count(".skipgossipid unsupported");
+			report.note(ctx.name, stepNo, "unsupported .skipgossipid: adding talk could change completion gates or character scope", `${l.args}${l.cond ? ` << ${l.cond}` : ""}${l.text ? ` >>${l.text}` : ""}`);
+			continue;
+		}
+		for (const mine of dialogueGroups) {
+			const existing = attachment(mine);
+			if (existing.length === 1) existing[0].gossip = Number(option[1]);
+			else {
+				// textOnly in RXP: never add a completion gate beside its real goals.
+				const holds = holders.length > 0;
+				addFor({ kind: "talk", npc: npcId, gossip: Number(option[1]), optional: holds }, mine);
+				if (!holds) report.note(ctx.name, stepNo, "standalone .skipgossipid -> talk (manual completion)", l.args);
+			}
+		}
+		report.count(".skipgossipid -> exact NPC gossip option");
 	}
 
 	if (enterZone) {

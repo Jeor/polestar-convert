@@ -32,6 +32,7 @@ export const PATH_USAGE = `usage: polestar-convert --path <WoW folder> [--routes
   --install   write the addon folders into the AddOns folder
   --out       write them into this folder instead (default: ./polestar-addon)
   --yes       ask nothing
+  --converter-revision  Git commit hash to record (caller-supplied, not verified)
 
 Convert only guides you have the right to use: free guides, or guides whose
 licence allows it. What you convert is your responsibility.`;
@@ -173,9 +174,10 @@ export async function run(a) {
 		locales = typeof a.locales === "string" ? (a.locales === "none" ? [] : listArg(a.locales, shipped.map((l) => l.toLowerCase()), "--locales").map((l) => shipped.find((s) => s.toLowerCase() === l))) : shipped;
 	} catch (e) { fail(e.message); }
 
-	const r = await buildAddons({ read, paths, readData, manifest, Compiler: module.Compiler, pack, opts: { sources: found, routes, selfFound: a["self-found"] != null, ah: a.ah, groups: a.groups }, locales, say: (t) => console.log(t) });
+	const r = await buildAddons({ read, paths, readData, manifest, Compiler: module.Compiler, pack, opts: { sources: found, routes, selfFound: a["self-found"] != null, ah: a.ah, groups: a.groups }, locales, converterRevision: a["converter-revision"] ?? null, say: (t) => console.log(t) });
 	const reports = resolve(a.install ? "polestar-convert-reports" : join(typeof a.out === "string" ? a.out : "polestar-addon", "reports"));
 	mkdirSync(reports, { recursive: true });
+	writeFileSync(join(reports, "build-provenance.json"), JSON.stringify(r.provenance, null, 2) + "\n");
 	for (const [source, run] of Object.entries(r.runs)) {
 		writeFileSync(join(reports, `${source}-run.txt`), runReport(run));
 		for (const m of run.missing || []) console.error(`missing: ${m}`);

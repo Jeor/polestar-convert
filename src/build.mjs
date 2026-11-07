@@ -10,6 +10,7 @@ import { namesFrom } from "./i18n/names.mjs";
 import { rxpTranslations } from "./rxp/translations.mjs";
 import { packJson } from "./pack.mjs";
 import { lintErrors } from "./addon.mjs";
+import { buildProvenance } from "./provenance.mjs";
 
 const NAMES = { rxp: "RestedXP", journey: "Journey", zygor: "Zygor" };
 
@@ -21,11 +22,12 @@ const NAMES = { rxp: "RestedXP", journey: "Journey", zygor: "Zygor" };
 //    (packFiles' [name, content]), warnings, translated: { <locale>: counts and per guide },
 //    skipped (translations left out), dropped (the guides the compiler refused, left out:
 //    [{ source, slug, file, errors }]) }
-export async function buildAddons({ read, paths, readData, manifest, Compiler, pack, opts, locales = [], say = () => {} }) {
+export async function buildAddons({ read, paths, readData, manifest, Compiler, pack, opts, locales = [], converterRevision = null, say = () => {} }) {
 	say("Loading Polestar's game data …");
 	const data = await loadData(readData);
 	const names = await loadNames(readData, data, manifest.levelXp);
 	const runs = await convertAddons(read, data, names, { ...opts, packId: pack.id, progress: (s) => say(`Converting ${NAMES[s]} …`) });
+	const provenance = buildProvenance({ runs, manifest, opts, locales, converterRevision });
 
 	say("Compiling the addon with Polestar's compiler …");
 	const texts = {};
@@ -37,11 +39,11 @@ export async function buildAddons({ read, paths, readData, manifest, Compiler, p
 	compiler.setSpellNames((await readData("tables/spell-names.json")) ?? "[]");
 	const packDiags = JSON.parse(compiler.setPack(packJson({ ...pack, version: packVersion(Object.fromEntries(Object.entries(runs).map(([s, r]) => [s, r.version]))) }), null, manifest.iface));
 	const packErrors = lintErrors(packDiags);
-	if (packErrors.length) return { runs, errors: packErrors, warnings: packDiags.length - packErrors.length };
+	if (packErrors.length) return { runs, provenance, errors: packErrors, warnings: packDiags.length - packErrors.length };
 	const fileOf = (g) => `guides/${g.slug}.guide`;
 	const guides = Object.values(runs).flatMap((r) => r.guides.map((g) => [fileOf(g), g.text]));
 	const c = compileKeeping(compiler, guides);
-	if (c.errors.length) return { runs, errors: c.errors, warnings: c.warnings };
+	if (c.errors.length) return { runs, provenance, errors: c.errors, warnings: c.warnings };
 	// What was left out is out of the runs too: no translation, no count for it.
 	const out = new Set(c.dropped.map((d) => d.file));
 	const dropped = [];
@@ -59,7 +61,8 @@ export async function buildAddons({ read, paths, readData, manifest, Compiler, p
 		translated[locale] = r;
 	}
 	const packed = JSON.parse(compiler.packFiles(JSON.stringify(translations)));
-	return { runs, folder: compiler.folder(), files: packed.files, warnings, translated, skipped: packed.warnings, dropped };
+	packed.files.push(["reports/build-provenance.json", JSON.stringify(provenance, null, 2) + "\n"]);
+	return { runs, provenance, folder: compiler.folder(), files: packed.files, warnings, translated, skipped: packed.warnings, dropped };
 }
 
 // Compiles `guides` ([[path, text]]), leaving out every guide the compiler finds an error

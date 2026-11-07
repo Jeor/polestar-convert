@@ -87,6 +87,13 @@ out, and named with the error; the rest of the addon is made. Restart the game
 completely: your guides show in Polestar's hub (`/polestar guides`) under
 Community guides.
 
+The addon includes `reports/build-provenance.json`, recording source addon
+versions, conversion options and the game-data manifest's build identity without
+local file paths or guide text. The command line also saves it with its reports.
+When building a known checkout, `--converter-revision <commit hash>` records that
+revision as caller-supplied; otherwise the revision is explicitly unavailable.
+The compiler is identified by its data manifest, not by a verified binary hash.
+
 ### Where the guide files must be
 
 The converter reads the guide files as plain text, the way the guide addon

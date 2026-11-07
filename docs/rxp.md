@@ -101,6 +101,18 @@ Read as RXP's own `applies()` (GuideLoader.lua) reads them:
   Tram) and flag 2 stay out.
 - `.stable`, `.equip`, `.deathskip` and the bank commands have no Polestar goal:
   tasks to tick, with RXP's text.
+- `.skipgossipid` can select one positive gossip option ID at one exact known
+  target NPC. It attaches to a matching vendor or trainer, or becomes a `talk`
+  goal that is optional beside one required level goal with the same
+  character scope. A dialogue-only step still needs a manual completion. New
+  talk goals are not added beside quest goals, waypoints or along work, where
+  they could change completion gates. Parent-prefixed IDs, multiple IDs,
+  dialogue sequences and ambiguous NPCs or conditions are reported instead of guessed. `.skipgossip`
+  menu-position instructions are not converted to option IDs.
+- Instructions attached to `.goto`, `.waypoint` and known-item `.use` commands
+  are kept like standalone text, with their class restrictions. Travel notes
+  beside the route carry into the destination step. Text on ignored or unknown
+  commands is listed in the report with its original guide and step for review.
 
 ### Quests the guide may not hold
 
